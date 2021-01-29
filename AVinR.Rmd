@@ -1,0 +1,1008 @@
+---
+title: "Project of Advanced Visualisation in R"
+author: "Matteo Pancaldi, Riccardo Ventura"
+output:
+  html_document:  
+    theme: journal
+    highlight: espresso
+    toc: true
+    toc_float:
+      collapsed: false
+    smooth_scroll: true
+---
+
+```{r library + theme, include=FALSE}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(tidyverse)
+library(corrplot)
+library(forestplot)
+library(ggparallel)
+library(reshape2)
+library(DT)
+library(ggcharts)
+library(caret)
+#First of all we set a theme that we will use in all plots
+our_theme <- theme(plot.title = element_text(color = 'darkred', size = 17, face = 'bold.italic'),
+                   plot.subtitle = element_text(color = 'darkred', size = 10, face = 'bold.italic'),
+                   plot.background =element_rect(fill = "lemonchiffon",colour = "red4",size = 4),
+                   panel.grid.major = element_line(colour = "grey65"),
+                   panel.grid.minor = element_line(colour = "grey99"),
+                   legend.title = element_text(colour="black", size=10,face="bold.italic"),
+                   panel.background =element_rect(fill = "white"),
+                   legend.background = element_rect(fill="orange",size=0.5, linetype="solid",colour ="red4"),
+                   axis.title = element_text(face = "bold.italic", color = "darkred"),
+                   axis.text.x = element_text(face = "italic",color = 'sienna3'),
+                   axis.text.y = element_text(face = "italic",color = 'sienna3'))
+```
+
+# Campus Recruitment
+
+![](images/placement.png)
+
+### Factors influencing Employability 
+
+The database that we are going to use in this projet consists of placement data of students in a campus. 
+
+It includes secondary and higher secondary school percentage and specialisation. 
+It also includes degree specialisation, type and Work experience and salary offers to the employed students.
+
+The database is provided by Jain University Bangalore and it can be found here (https://www.kaggle.com/benroshan/factors-affecting-campus-placement).
+
+
+The data is made up of 215 students with 18 variables.
+
+Description of the variables:
+
+* `sl.no`- Serial Number
+* `gender`- Gender- Male='M',Female='F'
+* `ssc_p`- Secondary Education percentage- 10th Grade
+* `ssc_b`- Board of Education- Central/ Others
+* `hsc_p`- Higher Secondary Education percentage- 12th Grade
+* `hsc_b`- Board of Education- Central/ Others
+* `hsc_s`- Specialisation in Higher Secondary Education
+* `degree_p`- Degree Percentage
+* `degree_t`- Under Graduation(Degree type)- Field of degree education
+* `workex`- Work Experience
+* `etest_p`- Employability test percentage (conducted by college)
+* `specialisation`- Post Graduation(MBA)- Specialisation
+* `mba_p`- MBA percentage
+* `status`- Status of placement- Placed /Not Placed
+* `salary`- Annuary Salary offered by corporate to candidates (Value = Indian Rupia)
+
+```{r Load data + str, echo=FALSE}
+#Let's star with load the data and see the structure of it.
+#setwd()
+Placement <- read.csv("/Users/panca97/Desktop/Erasmus/Adv\ Vis\ R/Final_Project/AVR_Pancaldi_Ventura/Placement_Data_Full_Class.csv")
+str(Placement)
+```
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+Placement <- Placement %>% 
+  rename(
+    Secondary_School_Score = ssc_p,
+    Secondary_School_Board = ssc_b,
+    High_School_Score = hsc_p,
+    High_School_Board = hsc_b, 
+    High_School_Type = hsc_s,
+    Degree_Score = degree_p,
+    Degree_Type = degree_t,
+    Gender = gender,
+    Work_experience = workex,
+    Employability_Score= etest_p,
+    Specialisation_Type = specialisation,
+    Specialisation_Score = mba_p,
+    Salary = salary,
+    Status = status
+    )
+```
+
+
+In order to make the database easier to use we have transformed some variables in **factors** and **renamed** all of them.
+
+Morever, in order to improve the graphical representations, we decided to convert the salary in thousand of indian Rupia. See the new range:
+
+```{r trasformation variables, echo=FALSE}
+Placement$Gender <- as.factor(Placement$Gender)
+Placement$Secondary_School_Board <- as.factor(Placement$Secondary_School_Board)
+Placement$High_School_Board <- as.factor(Placement$High_School_Board)
+Placement$High_School_Type <- as.factor(Placement$High_School_Type)
+Placement$Degree_Type <- as.factor(Placement$Degree_Type)
+Placement$Work_experience <- as.factor(Placement$Work_experience)
+Placement$Specialisation_Type <- as.factor(Placement$Specialisation_Type)
+Placement$Status <- as.factor(Placement$Status)
+Placement$Status <- factor(Placement$Status, levels = c("Not Placed","Placed"),labels=c("Not_Employed","Employed"))
+Placement1 <- Placement
+Placement$Salary <- Placement$Salary/1000
+range(Placement$Salary, na.rm = T)
+```
+
+There are 67 missing values that represent the people that has "status" = Not Employed.
+
+So they have NA in the variable "salary" and represent the total of missing values in all variables.
+
+```{r NA value, echo=FALSE}
+sum(is.na(Placement$Salary))
+```
+
+# Project topic
+
+* Visualize graphs that illustre the different characteristic of variables present in dataset. 
+
+* Create plots which show the correlation between type of establishments and variables like gender or score.
+
+* Find out the influence of Degree score to the final status of employed of students.
+
+* Show the frequency of students with work experience and how it influences the final status.
+
+* Present the categories of Employability test score.
+
+* Study the trend and features of salary to the employed students.
+
+* Fit a Multiple linear model and predict the Amount of Salary. 
+
+# First view of variables
+
+This table allows to explore the full dataset Placement.
+
+```{r datatable, echo=FALSE, message=FALSE, warning=FALSE}
+Placement %>% 
+  datatable(colnames = c('Student ID' = 1 ,'Gender' = 2, 'Secondary School Score' = 3,
+                         'Secondary School Position' = 4, 'High School Score' = 5,
+                         'High School Position' = 6, 'High School Type' = 7, 'Degree Score' = 8,'Degree Type' = 9,
+                         'Work Experience' = 10, ' Employability test Score' = 11, 'Specialisation Field' = 12,
+                         'Specialisation Score' = 13, 'Status' = 14, 'Salary' = 15),
+            class="cell-border" ,
+            style = "jqueryui",
+            rowname = F,
+            filter = 'top',
+            extensions = 'Buttons', options = list(
+              dom = 'Bfrtip',
+              buttons = c('copy', 'csv', 'excel', 'pdf', 'print')))
+```
+
+
+### Continuous variables
+
+We create a multiplot in order to show distribution of score in several istitution by density and histogram.
+
+```{r hist and density, echo=FALSE, message=FALSE, warning=FALSE}
+Placement %>%
+  gather(Attributes, value, c(3,5,8,11,13)) %>%
+  ggplot(aes(x=value, fill=Attributes)) +
+  geom_histogram(colour="black", show.legend=FALSE) +
+  facet_wrap(~Attributes, scales="free_x") +
+  scale_fill_manual(values = c("gold4", "orange", "firebrick2", "chocolate","lightsalmon2")) +
+  labs(x="Values", y="Frequency",
+       title="Score - Histograms") +
+  our_theme
+
+Placement %>%
+  gather(Attributes, value, c(3,5,8,11,13)) %>%
+  ggplot(aes(x=value, fill=Attributes)) +
+  geom_density(colour="black", alpha=0.5, show.legend=FALSE) +
+  scale_fill_manual(values = c("gold4", "orange", "firebrick2", "chocolate","lightsalmon2")) +
+  facet_wrap(~Attributes, scales="free_x") +
+  labs(x="Values", y="Density",
+       title="Score - Density plots") +
+  our_theme
+```
+
+We use boxplots to controll outliers in our continuous variables.
+
+Just the Higher and Secondary Education percentage present same outlier although we decided to keep all the values.
+
+```{r outliers, echo=FALSE}
+Placement %>%
+  gather(Attributes, values, c(3,5,8,11,13)) %>%
+  ggplot(aes(x=reorder(Attributes, values, FUN=median), y=values, fill=Attributes)) +
+  geom_boxplot(show.legend=FALSE) +
+  scale_fill_manual(values = c("gold4", "orange", "firebrick2", "chocolate","lightsalmon2")) +
+  labs(title="Score - Boxplots") +
+  theme(axis.title.y=element_blank(),
+        axis.title.x=element_blank()) +
+  ylim(35, 100) +
+  coord_flip() +
+  our_theme
+```
+
+### Categorical variables
+
+The barplots below show the distribution of students in different types of School/Degree and Specialisation.
+
+```{r type of schools, echo=FALSE, warning=FALSE}
+Placement %>%
+  gather(Attributes, value, c(4,6,7,9,12)) %>%
+  ggplot(aes(x=value, fill=Attributes)) +
+  geom_bar(stat="count", show.legend = F) +
+  scale_fill_manual(values = c("gold4", "orange", "firebrick2", "chocolate","lightsalmon2")) +
+  facet_wrap(~Attributes, scales="free_x") +
+  labs(x="Values", y="Frequency",
+       title="Type of School - Histograms") +
+  our_theme
+```
+
+We are going to study the distribution by gender of the 215 students with the following piechart.
+
+```{r gender, echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+ggplot(data=Placement, aes(x='', fill=Gender))+
+  geom_bar()+
+  coord_polar(theta="y") +
+  scale_x_discrete("") +
+  ggtitle("Distribution by gender") +
+  scale_fill_manual(values = c('chocolate', 'gold1')) +
+  our_theme
+```
+
+Another important factor variable allows to know if the students have work experience or not.
+
+```{r work exp2, echo=FALSE}
+ggplot(data = Placement, aes(x = Work_experience, fill = Work_experience)) +
+  geom_bar(position = "dodge", show.legend = F) + 
+  labs(y = "number of student", x = "work experience", title = "Distribution by work experience") +
+  stat_count(geom = "text",aes(label = stat(count)),position=position_fill(vjust=45)) +
+  scale_fill_manual(values = c('chocolate', 'gold1')) +
+  our_theme
+```
+
+The target variable of our analysis indicate if a student was **employed or not**.
+
+This bar plot summurises the frequency of students employed against the not employed by gender.
+
+Generally, the majority of students of our date are **males** (yellow bar) that have found **work** (employed).
+
+```{r status, echo=FALSE}
+ggplot(data=Placement, aes(x=Status, fill=Gender))+
+  geom_bar(stat="count", position="dodge") + 
+  labs(x = "",y='Frequency')+
+  ggtitle("Distribution of student by status and gender") +
+  scale_fill_manual(values = c('chocolate', 'gold1')) +
+  our_theme
+```
+
+When the a student is employed, Annuary Salary is offered by corporate.
+
+This graph shows the distribution of salary of employed candidates.
+
+```{r salary, echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(Placement, aes(Salary)) +
+  geom_histogram(aes(y=..density..), fill="gold1", color="darkred") +
+  geom_density(fill="chocolate", color = 'darkred', alpha=0.4) +
+  ggtitle("Distribution of salary") +
+  our_theme
+```
+
+# Correlation between variables
+
+In order to decide which variables could be more influence in our target variables, we decide to study the correlation between `Score of schools` and `Employability score` with two different graphs representation.
+
+As both plots show, just `Secondary school` score is correlated with `Degree score` and `Higher school score`.
+
+The results of `Employability score` are not related with the previous score of schools.
+
+```{r correlation, echo=FALSE, message=FALSE, warning=FALSE}
+Placement.mlr <- Placement %>% 
+  summarise(Secondary_School_Score,High_School_Score,Degree_Score,Employability_Score,Specialisation_Score)
+
+Placement.mlr_cor <- cor(Placement.mlr)
+col<- colorRampPalette(c('yellow', 'white','darkred'))(10)
+corrplot(Placement.mlr_cor, method="pie", type= "upper", diag = F, tl.srt = 40, tl.cex = 0.8, tl.col = "black", col = col)
+corrplot(Placement.mlr_cor, method = "number", tl.col = "black",diag = F, tl.srt = 40, tl.cex = 0.8, col = col ) 
+```
+
+In order to study a pattern inside a pairs of istitutional score, we create 4 scatter plot with the function `geom_smooth` by the final status of employed.
+
+```{r trend correlation, echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(Placement, aes(x= Secondary_School_Score, y = High_School_Score)) + 
+  geom_point(aes(colour = Status)) + geom_smooth(aes(colour = Status), se = F) +
+  scale_color_manual(values = c('chocolate', 'gold1')) +
+  labs(x="Secondary Education percentage", y="Higher Secondary Education percentage", title = "Secondary_School_Score vs Higher_School_Score",  subtitle = "by status")+
+  our_theme 
+
+ggplot(Placement, aes(x= High_School_Score, y = Degree_Score)) + 
+  geom_point(aes(colour = Status)) + geom_smooth(aes(colour = Status), se = F) +
+  scale_color_manual(values = c('chocolate', 'gold1')) +
+  labs(x="Higher Secondary Education percentage", y="Degree percentage", title = "High_School_Score vs Degree_Score", subtitle = "by status")+
+  our_theme 
+
+ggplot(Placement, aes(x= Degree_Score , y = Specialisation_Score)) + 
+  geom_point(aes(colour = Status)) + geom_smooth(aes(colour = Status), se = F) +
+  scale_color_manual(values = c('chocolate', 'gold1')) +
+  labs(x="Degree Percentage", y="Specialisation percentage", title = "Degree_Score vs Specialisation_Score", subtitle = "by status")+ 
+  our_theme 
+
+ggplot(Placement, aes(x= Specialisation_Score , y = Employability_Score)) + 
+  geom_point(aes(colour = Status)) + geom_smooth(aes(colour = Status), se = F) +
+  scale_color_manual(values = c('chocolate', 'gold1')) +
+  labs(x="Specialisation percentage", y="Employability test percentage", title = "Specialisation_Score vs Employability_Score",  subtitle = "by status")+
+  our_theme 
+```
+
+
+# Degree score and type
+
+**In order to discover more relations inside the dataset, we start to aggregate data and combine variables.**
+
+Definitely, we think that the `degree score` could be one of the most influential variables in the final status of employed or Not.
+
+Let's study the distribution of degree percentage with a red line which indicate the mean target.
+
+The mean degree score is between 65 and 70 percentage.
+
+The second plot below shows the distribution of degree score by type of university.
+
+The field of degree most chosen is **Communications Management**.
+
+Moreover the third plot illustrates the average score in different type of University: **Science and Technology** students get the best score. 
+
+```{r hist degree, echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(Placement, aes(Degree_Score))+
+  geom_histogram(binwidth = 5, fill = "orange", color = "white")+
+  scale_x_continuous(breaks = seq(50,90,5))+xlab("Degree Percentage (%)")+
+  labs(title  = "Histogram of the Degree Score")+
+  theme(plot.caption = element_text(hjust = 0.5))+
+  geom_vline(aes(xintercept = mean(Degree_Score)), color = "darkred", linetype = "dashed", lwd = 1) +
+  our_theme
+
+ggplot(Placement, aes(x = Degree_Score, fill = Degree_Type)) + 
+  geom_histogram(data = Placement) + 
+  geom_histogram(colour = "black") +
+  facet_wrap(~ Degree_Type) + guides(fill = FALSE) +
+  labs(title = "Distribution of Degree Score by Degree type")+
+  our_theme+
+  scale_fill_manual(values = c('darkorange', 'gold3','darkred'))
+
+Placement2 <- Placement %>%
+  group_by(Degree_Type) %>%
+  summarise(N = n(), mean_degree = round(mean(Degree_Score),2))
+
+
+ggplot(Placement2 ,aes(x = Degree_Type, fill=Degree_Type, y=mean_degree))+
+  geom_bar(stat='identity',show.legend = FALSE)+
+  geom_text(aes(label = mean_degree), vjust = 5, color = 'Black', size = 4)+
+  xlab('Degree Type') +
+  ylab('AVG Degree Point') +
+  labs(title = "Average degree point by type of University")+
+  our_theme + 
+  scale_fill_manual(values = c('darkorange', 'gold3','darkred'))
+```
+
+In comparison with the final status, is easily to see that degree score highest corresponds with **status = Employed (yellow density area)**.
+
+The vertical dashed lines indicate the mean score in each status.
+
+```{r density degre vs status, echo=FALSE, warning=TRUE}
+ggplot(Placement,aes(x = Degree_Score, group = Status))+
+  geom_density(aes(fill = Status),alpha = 0.75)+
+  geom_vline(aes(xintercept = mean(Degree_Score[Status == "Employed"])), linetype = "dashed", lwd = 1, color = "yellow2")+
+  geom_vline(aes(xintercept = mean(Degree_Score[Status == "Not_Employed"])), linetype = "dashed", lwd = 1, color = "darkred")+
+  scale_x_continuous(breaks = seq(50,90,5))+
+  theme(plot.caption = element_text(hjust = 0.5))+
+  labs(title = "Density plot of Degree by status")+
+  xlab("Degree Percentage (%)") +
+  our_theme+
+  scale_fill_manual(values = c('chocolate', 'gold1'))
+```
+
+Specifically, the violion plot belows allows us to discover more information about field of degree in different final status.
+
+The field where *employed students* get better grades is **Science and Technology** while the field where *not employed students* get better grades is **Communications Management**.
+
+```{r violin degre vs status, echo=FALSE}
+ggplot(Placement, aes(y = Degree_Score, x = Degree_Type, fill = Status)) + 
+  geom_violin() +
+  labs(title = "Distribution of Degree Score by Status")+
+  our_theme +
+  scale_fill_manual(values = c('chocolate', 'gold1'))
+```
+
+Analysing the box plot of degree scoree in different gender is possible to see that **Female students** have achieved better results in both of final status.
+
+```{r box plot degree, echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(Placement, aes(x = Status, y = Degree_Score, group = Status, fill = Status))+
+  geom_boxplot(show.legend = FALSE,outlier.color = "darkred")+
+  scale_y_continuous(breaks = seq(50,90,5))+
+  ylab("Degree Percentage (%)")+
+  labs(title = "Distribution of Degree percentages by Status")+
+  theme(plot.caption = element_text(hjust = 0.5))+
+  facet_wrap(~Gender, nrow = 1) +
+  scale_fill_manual(values = c('chocolate', 'gold1')) +
+  our_theme
+```
+
+# Specialisation
+The **Post Graduation** (MBA) specialisation is divided into two different field: 
+
+1. Marketing and Finance 
+2. Marketing and Human resources
+
+The first type of specialisation is the most chosen and the one for which more students will be employed.
+
+```{r mba type, echo=FALSE}
+ggplot(Placement,aes(x = Specialisation_Type, fill = Status))+
+  xlab('Type of specialisation') +
+  ylab('N of student') +
+  labs(title = 'Number of student in specialisation field by Status')+
+  geom_bar(position = "stack")+
+  guides(fill = guide_legend(nrow = 2,byrow = TRUE)) +
+  stat_count(geom = "text",aes(label = stat(count)),position=position_stack(vjust=0.5)) +
+  scale_fill_manual(values = c('chocolate', 'gold1')) +
+  our_theme
+```
+
+In the case of MBA specialisation, the **average score** of employed and not employed seem very close.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(Placement,aes(x = Specialisation_Score, group = Status))+
+  geom_density(aes(fill = Status),alpha = 0.75)+
+  geom_vline(aes(xintercept = mean(Specialisation_Score[Status == "Employed"])), linetype = "dashed", lwd = 1, color = "yellow2")+
+  geom_vline(aes(xintercept = mean(Specialisation_Score[Status == "Not_Employed"])), linetype = "dashed", lwd = 1, color = "darkred")+
+  scale_x_continuous(breaks = seq(50,90,5))+
+  theme(plot.caption = element_text(hjust = 0.5))+
+  labs(title = "Density plot of Mba percentage by Status")+
+  xlab("Specialisation percentage (%)") +
+  our_theme+
+  scale_fill_manual(values = c('chocolate', 'gold1'))
+```
+
+# Work Experience
+
+In working life, not only the ability to study is important.
+
+**Work experience** could be highly requested and fundamental additional skill.
+
+The proportion of **not employed** students mutuates from 13.5% to 40.4% betweeen work experience or not.
+
+Here there are two pie plots that show how the work experience influences the final status of employed or not:
+
+|                 | Work experience |No Work experience |
+|:---------------:|:---------------:|:-----------------:|
+|   *Employed*    |  64             | 84                | 
+|  *Not Employed* |  10             | 57                |  
+
+
+```{r Work exp, echo=FALSE, message=FALSE, warning=FALSE}
+Work <- Placement %>%
+  group_by(Work_experience, Status) %>%
+  summarise(N = n()) 
+
+Yes <- filter(Work, Work_experience == "Yes")  
+No <- filter(Work, Work_experience == "No")
+
+ggplot(Yes, aes (x="", y = N, fill = Status)) + 
+  geom_bar(width = 1, stat = "identity") +
+  geom_text(aes(label = paste(round(N / sum(N) * 100, 1), "%")),
+            position = position_stack(vjust = 0.5)) +
+              coord_polar("y") +
+  labs(title = "Employed People with work experience", y = NULL, x = NULL) +
+  scale_fill_manual(values = c('chocolate', 'gold1')) +
+  theme(plot.title = element_text(color = 'darkred', size = 17, face = 'bold.italic'),
+              plot.background =element_rect(fill = "lemonchiffon",colour = "red4",size = 4),
+              panel.grid.major = element_line(colour = "grey50"),
+              panel.grid.minor = element_line(colour = "grey85"),
+              legend.title = element_text(colour="black", size=10,face="bold.italic"),
+              panel.background =element_rect(fill = "white"),
+              legend.background = element_rect(fill="orange",size=0.5, linetype="solid",colour ="red4"),
+              axis.title = element_text(face = "bold.italic", color = "darkred"),
+              axis.text = element_blank())
+
+ggplot(No, aes (x="", y = N, fill = Status)) + 
+  geom_bar(width = 1, stat = "identity") +
+  geom_text(aes(label = paste(round(N / sum(N) * 100, 1), "%")),
+            position = position_stack(vjust = 0.5)) +
+  coord_polar("y") +
+  labs(title = "Employed People without work experience", y = NULL, x = NULL) +
+  scale_fill_manual(values = c('chocolate', 'gold1')) +
+  theme(plot.title = element_text(color = 'darkred', size = 17, face = 'bold.italic'),
+        plot.background =element_rect(fill = "lemonchiffon",colour = "red4",size = 4),
+        panel.grid.major = element_line(colour = "grey50"),
+        panel.grid.minor = element_line(colour = "grey85"),
+        legend.title = element_text(colour="black", size=10,face="bold.italic"),
+        panel.background =element_rect(fill = "white"),
+        legend.background = element_rect(fill="orange",size=0.5, linetype="solid",colour ="red4"),
+        axis.title = element_text(face = "bold.italic", color = "darkred"),
+        axis.text = element_blank())
+```
+
+
+# Employability test score
+
+The Employability test conducted by college summurise the score of every students in the final test for the job.
+
+The horizontal bar plot below displays the distribution of the students by gender in different **quantile categories** of Employability score.
+
+The highest **range of score** is reached mostly by **males**.
+
+```{r Employ , echo=FALSE, message=FALSE, warning=FALSE}
+Placement$etest_Q<-cut(Placement$Employability_Score,quantile(Placement$Employability_Score,probs = seq(0, 1, 0.25)))
+Placement3 <- Placement %>%
+  group_by(etest_Q,Gender) %>%
+  summarise(number=n())%>%
+  drop_na()
+
+ggplot(data = Placement3, aes(x = etest_Q, y = number, fill = Gender)) +
+  geom_bar(stat = 'identity') +
+  geom_text(aes(label = number), position = "stack",color = 'black', size = 3.5,hjust=3.5)+
+  scale_fill_manual(values = c('chocolate', 'gold1'))+
+  coord_flip() + 
+  labs(title = "Distribution of Student of Score Employability test", subtitle = "By Gender") +
+  our_theme
+```
+
+We decided to create a random sample of 15 students in order to visulize how they changed the score between `degree score` to `Employability score`.
+
+The majority of students **lost positions** and a lot of them will not be employed.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+set.seed(123)
+Casual_sample <- Placement[sample(nrow(Placement), 15), ]
+order.degree <-order(Casual_sample$Degree_Score, decreasing = T)
+order.etest <-order(Casual_sample$Employability_Score, decreasing = T)
+
+Casual_sample$Degree_score_rank[order.degree] <- 1:nrow(Casual_sample)
+Casual_sample$Employability_Score_rank[order.etest] <- 1:nrow(Casual_sample)
+
+Casual_sample <- Casual_sample[,c(1,14,17,18)]
+Casual_sample$sl_no <-as.character(Casual_sample$sl_no)
+Casual_sample$status <- as.factor(Casual_sample$Status)
+dfm <- melt(Casual_sample, id.vars = c("sl_no", "status"), measure.vars = c("Degree_score_rank", "Employability_Score_rank"))
+
+
+ggplot(data = dfm, aes(x = variable, y = value, group = sl_no)) +
+  geom_line(aes(color = status),size = 2) +
+  scale_color_manual(values = c('darkorange','darkred')) +
+  geom_point(size = 2.3, shape = 21, fill = 'black') +
+  geom_text(data = dfm %>% filter(variable == "degree_rank"),
+            aes(label = sl_no, x = variable, color = status) , hjust = 1.1, size = 3.5) + 
+  geom_text(data = dfm %>% filter(variable == "etest_rank"),
+            aes(label = sl_no, x = variable, color = status), hjust = -0.1,  size = 3.5) +
+  scale_x_discrete(expand = c(.01, .2)) +
+  scale_y_reverse(breaks = seq(1, 15)) +
+  labs(title = "15 Random Students ranks", x = "", y = "Rank") +
+  our_theme
+```
+
+# Salary
+
+The frequency of **final status of placement** students is presented below:
+
+| Not Employed | Employed |
+|:------------:|:--------:|
+|67            | 148      | 
+|31.2%         | 68.8%    | 
+
+Summing up, the *salary* indicates the amount of money offered by corporate to candidates employed.
+
+Consequently, the continuous variable `salary` contains **67 missing values** that will be not display.  
+
+The first set of scatter plots would proves how the salary is influenced by the score of different type of schools and it will distinguish students between male and female.
+
+```{r school vs salary, echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(data = Placement, aes(y = Salary, x = Secondary_School_Score ))+
+  geom_point(data = Placement, aes(color = Secondary_School_Board, shape = Gender), size = 2.5) +
+  guides(color = guide_legend(title = "Type of Secondary school")) + 
+  labs(title = "Secondary School Score vs Salary", subtitle = "by type of school and gender") +
+  scale_color_manual(values = c('darkorange', 'gold3','darkred')) +
+  our_theme
+
+ggplot(data = Placement, aes(y = Salary, x = High_School_Score))+
+  geom_point(data = Placement, aes(color = High_School_Type, shape = Gender), size = 2.5) +
+  guides(color = guide_legend(title = "Type of Highschool")) + 
+  labs(title = "High School Score vs Salary", subtitle = "by type of school and gender") +
+  scale_color_manual(values = c('darkorange', 'gold3','darkred')) +
+  our_theme
+
+ggplot(data = Placement, aes(y = Salary, x = Degree_Score))+
+  geom_point(data = Placement, aes(color = Degree_Type, shape = Gender), size = 2.5) +
+  guides(color = guide_legend(title = "Type of Degree")) +
+  labs(title = "Degree score vs salary", subtitle= "by type of University and gender") +
+  scale_color_manual(values = c('darkorange', 'gold3','darkred')) +
+  our_theme
+
+ggplot(data = Placement, aes(y = Salary, x = Specialisation_Score))+
+  geom_point(data = Placement, aes(color =  Specialisation_Type, shape = Gender), size = 2.5) +
+  guides(color = guide_legend(title = "Type of Specialisation")) +
+  labs(title = "Specialisation score vs salary",subtitle = "by type of Specialisation and gender") +
+  scale_color_manual(values = c('chocolate', 'gold1')) +
+  our_theme
+```
+
+We divided the salary in several categories, in order to present the percentage distribution of student by gender in the followed piramid chart!
+
+There is not much difference between gender; all of students could be reach higher salary.
+
+Even if in the **first** salary bracket the percentage of **male** is slightly **smaller**.
+
+```{r Piramid chart of category salary, echo=FALSE, message=FALSE, warning=FALSE}
+Placement_agg3 <- Placement %>%
+  filter(Status == "Employed")
+
+for(i in 1:NROW(Placement_agg3)){
+  if(Placement_agg3$Salary[i] > 0 & Placement_agg3$Salary[i] <= 150){
+    Placement_agg3$Salary_7[i] <- "(0,150]"
+  }else if(Placement_agg3$Salary[i] > 150 & Placement_agg3$Salary[i] <= 300){
+    Placement_agg3$Salary_7[i] <- "(150,300]"
+  }else if(Placement_agg3$Salary[i] > 300 & Placement_agg3$Salary[i] <= 450){
+    Placement_agg3$Salary_7[i] <- "(300,450]"
+  }else if(Placement_agg3$Salary[i] > 450 & Placement_agg3$Salary[i] <= 600){
+    Placement_agg3$Salary_7[i] <- "(450,600]"
+  }else if(Placement_agg3$Salary[i] > 600 & Placement_agg3$Salary[i] <= 750){
+    Placement_agg3$Salary_7[i] <- "(600,750]"
+  }else if(Placement_agg3$Salary[i] > 750 & Placement_agg3$Salary[i] <= 900){
+    Placement_agg3$Salary_7[i] <- "(750,900]"
+  }else if(Placement_agg3$Salary[i] > 900){
+    Placement_agg3$Salary_7[i] <- ">900"
+  }
+}
+
+Placement_agg3 <- Placement_agg3 %>%
+  group_by(Gender, Salary_7) %>%
+  summarise(N = n())
+
+
+Placement_agg3 <- as.data.frame(Placement_agg3)
+Placement_agg3[9,] = c("F", "(450,600]","0")
+Placement_agg3[10,] = c("F", ">900","0")
+Placement_agg3$Gender <- as.factor(Placement_agg3$Gender)
+Placement_agg3$Salary_7 <- as.factor(Placement_agg3$Salary_7)
+Placement_agg3$N <- as.integer(Placement_agg3$N)
+
+
+for(i in 1:nrow(Placement_agg3)){
+  if(Placement_agg3$Gender[i] == "M"){
+    Placement_agg3$percentage[i] <- round((Placement_agg3$N[i]) / 100 * 100, 2)
+  } else{
+    Placement_agg3$percentage[i] <- round((Placement_agg3$N[i]) / 48 * 100, 2)
+  }
+}
+Placement_agg3[c(1,2,3,9,10),4] <- -1*Placement_agg3[c(1,2,3,9,10),4]
+
+ggplot(Placement_agg3, aes(x = Salary_7, y = percentage, fill = Gender)) + 
+  geom_bar(stat = "identity") + 
+  geom_bar(stat = "identity") + 
+  scale_y_continuous(limits = c(-90,90),
+                     breaks = seq(-105, 105, 15), 
+                     labels = paste(as.character(c(seq(105, 0,-15), seq(15, 105, 15))), "%")) + 
+  coord_flip()+
+  scale_fill_manual(values = c('darkred', 'gold3')) + 
+  labs(title = "Salary percentage Pyramid chart by gender", x = "salary categories") +
+  our_theme
+```
+
+The deviation graph below shows the incidence of istitutional score in the amount of the salary.
+
+**There aren't** variables that are **negative correlated** with it.
+
+```{r echo=FALSE}
+df <- round(cor(Placement[,c(3,5,8,11,13)])[1,-1]*100,2) %>%
+  data.frame(ro = ., 
+             x = names(.),
+             magn = ifelse(. < 0, 'neg', 'pos')) %>% 
+  mutate(x = reorder(x, ro))
+
+ggplot(df, aes(x = x, y = ro, fill = magn)) +
+  geom_col() + 
+  coord_flip() +
+  theme(legend.position = 'none')  +
+  geom_text(aes(label = ro, hjust = ifelse(magn == 'neg', -.1, 1.1)), size = 4) +
+  ggtitle("Incidence of istitutional score in the salary")+
+  labs(y="Percentage of correlation",x="")+
+  scale_fill_manual(values = "gold3") +
+  our_theme
+```
+
+Continuing to consider only employed students, the table below helps to understand that just few students with **degree type = Marketing & Finance** succeeded to reach very **high salary**.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+Placement_agg2 <- Placement %>%
+  filter(Status == "Employed")
+
+for(i in 1:NROW(Placement_agg2)){
+  if(Placement_agg2$Salary[i] > 0 & Placement_agg2$Salary[i] <= 250){
+    Placement_agg2$Salary_4[i] <- "(0,250]"
+  }else if(Placement_agg2$Salary[i] > 250 & Placement_agg2$Salary[i] <= 500){
+    Placement_agg2$Salary_4[i] <- "(250,500]"
+  }else if(Placement_agg2$Salary[i] > 500 & Placement_agg2$Salary[i] <= 750){
+    Placement_agg2$Salary_4[i] <- "(500,750]"
+  }else if(Placement_agg2$Salary[i] > 750 & Placement_agg2$Salary[i] <= 1000){
+    Placement_agg2$Salary_4[i] <- "(750,1000]"
+  }
+}
+
+Placement_agg2 <- Placement_agg2 %>%
+  group_by(Specialisation_Type, Salary_4)  %>%
+  summarise(N = n()) 
+
+Placement_agg2 <- as.data.frame(Placement_agg2)
+Placement_agg2[7,] = c("Mkt&HR", "(500,750]", 0)
+Placement_agg2[8,] <- c("Mkt&HR", "(750,1000]",0)
+Placement_agg2$N <- as.numeric(Placement_agg2$N)
+
+for(i in 1:NROW(Placement_agg2)){
+  if(i <= 4){
+  Placement_agg2$label[i] <- paste(round(Placement_agg2$N[i]/sum(Placement_agg2$N[1:4])*100,2),"%")
+  }else if(i > 4){
+    Placement_agg2$label[i] <- paste(round(Placement_agg2$N[i]/sum(Placement_agg2$N[4:8])*100,2),"%")
+  }
+}
+
+ggplot(Placement_agg2, aes(x = Specialisation_Type, y = Salary_4)) + 
+  geom_tile(aes(fill = N),show.legend = F) +
+  geom_text(aes(label = label), size = 4.5) + 
+  geom_text(aes(label = label), size = 4.5) +
+  scale_fill_gradient(low = 'gold1', high = 'chocolate') +
+  labs(title = 'Employed Percentage of students in different Score', x = 'Specialisation_Type', y = 'Salary') +
+  our_theme
+```
+
+## Multiple Linear Regression
+
+**Multiple Linear Regression** (MLR) is a statistical technique for finding existence of an association relationship between a dependent variable and several independent variables.
+
+The functional form is given by:
+
+$$Y = \beta_{0} + \beta_{1} X_{1} + \beta_{2} X_{2} + .. + \beta_{p} X_{p} + e$$
+where:
+
+* Y is the dependent variable, 
+* X1, X2, Xp are independent variables, 
+* b0 is a constant, 
+* b1, b2, bp are the partial regression coefficients,
+* e is the error term (residual).
+
+Let's start to fit the model with Y = *Salary*.
+
+From the output, the estimated values of the parameters are: 
+
+b0 = 168690.94; b1 = -641.63; b2 = 59.53 ; b3 = -2061.50; b4 = 1112.66 and b5 = 3548.13
+
+The **regression model** is given by:
+
+$$Salary_p = b0 + b1Secondary_School_Score  + b2High_School_Score + b3Degree_Score +b4Employability_Score + b5Specialisation_Score$$
+
+$$Salary_p = 168690.94 - 641.631Secondary_School_Score + 59.53High_School_Score - 2061.50Degree_Score  + 1112.66Employability_Score + 3548.13Specialisation_Score$$
+
+The Salary would grow by **1112.66** with every one increase score in **Employability_Score**, provided all other variables are kept stable. 
+
+The p-value is grather than the confidence level and with an `alpha = 0.1` we **reject** the null hypothesis **Employability_Score = 0** and **Specialisation_Score = 0** and they are significative.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+set.seed(123)
+Placement.lm <- Placement1 %>% 
+  filter(Salary >=  1) %>%
+  summarise(Secondary_School_Score, High_School_Score, Degree_Score ,Employability_Score, Specialisation_Score, Salary)
+
+lm.fit <- lm(Salary ~ . , data = Placement.lm)
+summary(lm.fit)
+```
+
+The four plots show the top 3 most extreme data points labelled with the row numbers of the data in the data set. 
+
+The standardized residual is the residual divided by its standard deviation.
+
+**Residuals vs Fitted**:
+Used to check the linear relationship assumption. An approximately horizontal line (red line), without distinct patterns is an indication for a linear relationship. Any pattern in the residual plot would indicate incorrect specification of the model.
+In our example, there is **no pattern** in the residual plot. This suggests that we can assume linear relationship.
+
+**Normal Q-Q**:
+Used to examine whether the residuals are normally distributed. It is good if residuals points follow the straight dashed line.
+In our example, most of the points fall approximately along the reference line, so **we can assume normality**.
+
+**Scale-Location**:
+Used to check the homogeneity of variance of the residuals (homoscedasticity). This plot shows if residuals are spread equally along the ranges of the predictors. Failure to meet this assumption will result in unreliability of the hypothesis tests. It is good if you see a horizontal line with equally spread points. In our case we have approximated indication of **homoscedasticity**.
+
+**Residuals vs Leverage**:
+Used to identify influential cases, that is, extreme values that might influence the regression results when included or excluded from the analysis.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+plot(lm.fit)
+```
+
+### Prediction linear model
+
+**In this section we decided to fit a model in order to predict the amount of salary.**
+
+First of all, we filtered the data considering only the students employed with salary.
+
+In order to split data into train and test we used the function `createDataPartition`.
+
+We are going to assign:
+
+* 70% on our Train for 105 observations
+* 30% on our Test for 43 observations
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+set.seed(123)
+training_obs <- createDataPartition(Placement.lm$Salary, 
+                                     p = 0.7, 
+                                     list = FALSE) 
+
+salary.train <- as_tibble(Placement.lm[training_obs,])
+salary.test  <- as_tibble(Placement.lm[-training_obs,])
+```
+
+Now we are able to **fit our model** and discovered the **importance of variables**.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+set.seed(123)
+lm.fit2 <- lm(Salary ~ . , data = salary.train)
+
+
+lm.importance.value <- as.data.frame(varImp(lm.fit2))
+lm.importance.value <- cbind(Variable = rownames(lm.importance.value),lm.importance.value)
+```
+
+Here, we made a **prediction of salary** and plot it.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+set.seed(123)
+lm.pred <- predict(lm.fit2, salary.test)
+
+test_target <- salary.test[,6] %>% pull()
+
+tibble(
+  pred = lm.pred,
+  actual = test_target
+) %>% 
+  ggplot(aes(pred, actual)) +
+  geom_point( color = "orange") +
+  geom_smooth(method = "lm", colour = "brown4", fill = "yellow", alpha = 0.1, size = 1.5) +
+  labs(title = "Actual vs Predicted values")+
+  our_theme
+```
+
+The most **important variable** in salary prediction is the Final Score in `Employability`.
+
+```{r echo=FALSE}
+ggplot(lm.importance.value, aes(reorder(Variable, Overall), Overall, fill = Overall)) +
+  geom_bar(stat = "identity", show.legend = F) + 
+  coord_flip()+ 
+  scale_fill_gradient(low = "yellow2", high = "darkred") +
+  scale_y_continuous(breaks = seq(0, 2, 0.5), 
+                     labels = paste(as.character(seq(0, 20, 5)), "%")) +
+  labs(title = "Importance of Variables", y = "Importance", x = "") +
+  our_theme
+```
+
+Now, we tried to predict amount of Salary between two virtual students randomly created.
+
+The prediction salary shows that the importance of grade in **Employability score** (Luca) is more influential than a **good score in schools**. (Stefan)
+
+**Stefan**
+
+* Secondary school percentage = 80
+* Higher school percentage = 82
+* Degree school percentage = 86
+* Employability test percentage = 70
+* Specialisation percentage = 78
+
+**Luca**
+
+* Secondary school percentage = 70
+* Higher school percentage = 62
+* Degree school percentage = 72
+* Employability test percentage = 88
+* Specialisation percentage = 76
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+Stefan <- data.frame(Secondary_School_Score = 80,
+                  High_School_Score = 82,
+                  Degree_Score = 86,
+                  Employability_Score = 70,
+                  Specialisation_Score = 78)
+print(paste0("Salary for Stefan: ", round(predict(lm.fit2, Stefan), 2)))
+
+Luca <- data.frame(Secondary_School_Score= 70,
+                  High_School_Score = 62,
+                  Degree_Score = 72,
+                  Employability_Score = 88,
+                  Specialisation_Score = 76)
+print(paste0("Salary for Luca: ", round(predict(lm.fit2, Luca), 2)))
+```
+
+## More salaried students
+
+We are curious to see the salaries **higher than 600** and the students who reached it by the comparison of them Employability score and whether they have **work experience or not**.
+
+Let's include the amount of salary for each one.
+
+```{r high salary, echo=FALSE, message=FALSE, warning=FALSE}
+Placement_max <- Placement %>%
+  filter(Salary > 600)
+
+ggplot(Placement, aes(x = Employability_Score, y = Salary, color= Work_experience)) +
+  geom_point()+
+  labs(y = 'Salary in thounsand', x = 'Employability test score',title = 'Salary in thousand vs Employability test score') +
+  geom_text(data = Placement_max, aes(label = Salary),hjust = -0.5, vjust = 0.4,color='darkred', size = 3) +
+  geom_text(data = Placement_max, label = "K of Indian Rupia",hjust = -0.33, vjust = 0.4,color='darkred', size = 3) +
+  geom_text(data = Placement_max, aes(label = sl_no),hjust = 1.5, vjust = 1.5,color='black', size = 3) +
+  scale_color_manual(values = c('chocolate', 'gold1')) +
+  our_theme
+
+```
+
+Furthemore, we decide to investigate the trend of score in different schools of **three more students salaried**. 
+
+It is easy to see that high salary is not always links with high score: **see 151 student ID**.
+
+```{r three more salaried, echo=FALSE}
+Best_salary <- Placement_max[, c(1,3,5,8,13,11)]
+
+Best_salary2 <- melt(Best_salary, id.vars = ("sl_no"), value.name = "Score")
+
+ggplot(data = Best_salary2, aes(x = variable, y = Score, group = sl_no)) +
+  geom_point(size = 2) +
+  geom_line(aes(color= as.factor(sl_no))) +
+  labs(title = "School score of three more salaried students",x="") +
+  scale_color_manual(values = c('darkorange', 'gold3','darkred')) +
+  guides(color = guide_legend(title = "Student ID")) +
+  theme(plot.title = element_text(color = 'darkred', size = 17, face = 'bold.italic'),
+                   plot.subtitle = element_text(color = 'darkred', size = 10, face = 'bold.italic'),
+                   plot.background =element_rect(fill = "lemonchiffon",colour = "red4",size = 4),
+                   panel.grid.major = element_line(colour = "grey65"),
+                   panel.grid.minor = element_line(colour = "grey99"),
+                   legend.title = element_text(colour="black", size=10,face="bold.italic"),
+                   panel.background =element_rect(fill = "white"),
+                   legend.background = element_rect(fill="orange",size=0.5, linetype="solid",colour ="red4"),
+                   axis.title = element_text(face = "bold.italic", color = "darkred"),
+                   axis.text.x = element_text(face = "italic",color = 'sienna3', angle = 40, hjust = 1),
+                   axis.text.y = element_text(face = "italic",color = 'sienna3'))
+```
+
+# Conclusion
+
+Regarding the amount of salary, we could say that an **execellent Job test** and **experience on work** should be the best way in order to reach **higher values** but not without exceptions.
+
+Then, we decided to conclude our project visulizing this particolar graph which shows the flow of all student accross the different variable like `score of degree`, `gender` and `work experience`.
+
+Naturally, the status of **Placement or not** represent the last division in the following graph.
+
+We have put the different typologies of **Degree** because we considered it as the most influance score on final job status.
+
+```{r ggparallele, echo=FALSE, message=FALSE, warning=FALSE}
+Placement5 <- Placement %>%
+  group_by(Degree_Type, Gender, Work_experience, Status) %>%
+  summarise(N = n())
+
+Placement5 <- as.data.frame(Placement5)
+Placement5[,1] <- as.factor(Placement5[,1])
+Placement5[,2] <- as.factor(Placement5[,2])
+Placement5[,3] <- as.factor(Placement5[,3])
+Placement5[,4] <- as.factor(Placement5[,4])
+Placement5[,5] <- as.numeric(Placement5[,5])
+
+ggparallel(names(Placement5)[c(1,2,3,4)], order = 0,Placement5, weight = "N", color = "black", alpha = 0.5) +
+  scale_fill_manual(values  = c("indianred3", "red","darkgoldenrod","gold4","darkorange",
+                                "gold","darkred","firebrick1","darkorange4"), guide = "none") +
+  scale_colour_manual(values  = c("indianred3", "red","darkgoldenrod","gold4","darkorange",
+                                  "gold","darkred","firebrick1","darkorange4"), guide = "none") +
+  labs(title = "Flow of students in different variables") +
+  our_theme
+```
+
+Finally, we decided to analyze in specific way the **distribution of students employed** by graduation and specialisation score categories quantile.
+
+As we could imagine, the higher percentage of employed students took an higher score in **both of the schools.**
+
+Moreover, it is curiously to see that there is an **higher percentage** of employed candidates who took score more or less between **60 and 70**.
+
+This confirm also the idea that **not only very studious** students can access to work.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+Placement$degree_p_4 <- cut(Placement$Degree_Score,quantile(Placement$Degree_Score, probs = seq(0, 1, 0.25)))
+Placement$etest_p_4 <- cut(Placement$Employability_Score,quantile(Placement$Employability_Score, probs = seq(0, 1, 0.25)))
+
+Placement_agg <- Placement %>%
+  filter(Status == "Employed") %>%
+  group_by(degree_p_4, etest_p_4) %>%
+  summarise(N=n()) %>%
+  drop_na()
+
+ggplot(Placement_agg, aes(x = degree_p_4, y = etest_p_4)) + 
+  geom_tile(aes(fill = N),show.legend = F) +
+  geom_text(aes(label = paste(round(N / sum(N) * 100, 2), "%")), size = 4.5) + 
+  scale_fill_gradient(low = 'gold1', high = 'chocolate') +
+  labs(title = 'Employed Percentage of students in different Score categories ', x = 'Degree Score Category', y = 'Specialisation Score Category') +
+  our_theme
+```
