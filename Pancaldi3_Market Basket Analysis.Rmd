@@ -1,0 +1,198 @@
+---
+title: "Market Basket Analysis"
+author: "Matteo Pancaldi"
+output:
+  html_document:  
+    theme: sandstone
+    highlight: espresso
+    toc: true
+    toc_float:
+      collapsed: false 
+    smooth_scroll: true
+---
+```{r message=FALSE, warning=FALSE, include=FALSE}
+library(arules)
+library(arulesViz)
+setwd("~/Desktop/Erasmus/unsupervised/UL3_Association_Rules")
+```
+
+![](image/MBA.png)
+
+Association rules is an unsupervised learning technique which aims to describe and discover regularities between items in transaction data.
+
+It is often used in **basket analysis** in sales to check if there are some general patterns in customers behaviour.
+
+> If customer buys X, he also tends to buy Y
+
+This is the statement that advice the sale department to improve knowledge of customers’ behavior.
+
+The **main goal** of this analysis is to perform most common algorithm used to observe interesting patterns between consumer’s purchases.
+
+# Dataset
+
+The data used in this project contains information about Customers buying different **grocery items** at a Mall and you can find it on kaggle: https://www.kaggle.com/roshansharma/market-basket-optimization/version/1.
+
+As the summary output shows, there are **7500 transactions and 119 products**.
+
+```{r message=FALSE, warning=FALSE}
+data<- read.transactions("Market_Basket_Optimisation.csv",
+                         format = "basket", sep = ",", header = T)
+summary(data)
+```
+
+The output above anticipates already the most frequent items present in the data, let's try to present them on graph.
+
+```{r echo=FALSE}
+itemFrequencyPlot(data, topN = 15, type = "absolute", main = "15 Item frequency", cex.names = 0.9, col= rainbow(15))
+```
+
+# Association rules
+
+## Apriori 
+
+First of all, I have to create the rules using **Apriori Algorithm**.
+
+There are three main indicators used to assess the quality of rules:
+
+1. `Support`
+2. `Confidence`
+3. `lift`
+
+In order to obtain any results to analysis the confidence had to be lowered, I decided to lower their values to **0.01 (support)** and **0.4 (confidence)**.
+
+**17 rules were found.**
+
+```{r}
+rules = apriori(data, parameter = list(supp = 0.01, conf = 0.4))
+```
+
+### Visualization of rules 
+
+```{r echo=FALSE}
+plot(rules, method="paracoord", control=list(reorder=TRUE))
+```
+
+## Support
+
+`Support` is the number of times a certain group of items appears in all orders, in other words, it is the **probability of appearing a transaction with all** items together.
+
+$$Support(x) = \frac{Count(x)}{N}$$
+where x represents an item and N represents the total number of transactions.
+
+Analysing the most frequent rules by support (around 2.5%):
+
+* 307 transactions on total, contained **ground beef and mineral water**.
+
+```{r}
+rules_support = sort(rules, by = "support", decreasing = TRUE)
+inspect(head(rules_support))
+```
+
+## Confidence
+
+`Confidence` indicates the power of the rule, how often given rule is true.
+
+It has maximum value of 1 and it is when customers **always buy item B with item A**.
+
+$$Confidence(x -> y) = \frac{Support(x,y)}{Support(x)}$$
+It is calculated as the support of item x and y divided by the support of item x.
+
+
+```{r}
+rules_confidence = sort(rules, by = "confidence", decreasing = TRUE)
+inspect(head(rules_confidence))
+```
+
+## Lift
+
+`Lift` can be seen as a measure of correlation of sorts and it is the indicator of **how strong the items are linked**.
+
+* Lift > 1  -> products are positively correlated 
+* Lift < 1 -> products are negatively correlated
+* Lift = 1 -> products are independent
+
+It can be also defined as a measure of how much more likely one item is to be purchased relative to its typical purchase rate, given that you know another item has been purchased.
+
+$$Lift(x -> y) = \frac{Confidence(x -> y)}{Support(y)}$$
+
+In this case, it is more probable that a customer buys **ground beef, mineral water and spaghetti together** than just these products alone.
+
+```{r}
+rules_lift = sort(rules, by = "lift", decreasing = TRUE)
+inspect(head(rules_lift))
+```
+
+# Spaghetti rules 
+
+![](image/spaghetti.jpg)
+
+
+In order to go in depth with my analysis, I decided to concentrate my focus on a tipically product of my Italian country: `Spaghetti`.
+
+In other word, I want to find out what products usually are bought together with the **famous type of pasta**.
+
+The output below shows that most **strong rule** is the combination `frozen vegetables`,`olive oil`,`tomatoes` and `spaghetti`.
+
+We can say that a combination of pasta taste has been identified.
+
+It has the highest lift <- `4.835980`.
+
+On other hand, **33 transactions** on total, contained **olive oil, tomatoes and spaghetti**.
+
+```{r}
+rules_spaghetti = apriori(data,
+    parameter = list(supp = 0.002, conf = 0.6),
+    appearance = list(default = "lhs", rhs = "spaghetti"),
+    control = list(verbose = F)
+  )
+inspect(rules_spaghetti, linebreak = FALSE)
+```
+
+## Visualization of Spaghetti rules
+
+Let's try to plot the 10 rules created above.
+
+```{r message=FALSE, warning=FALSE}
+plot(rules_spaghetti, method="graph", cex=0.7)
+plot(rules_spaghetti, method="paracoord", cex=0.7)
+```
+
+# Conclusion 
+
+In addition to the basic measures (support, confidence, lift) there are also **different measures** that can be conducted to get the deep knowledge of data:
+
+* Jaccard Index
+* Affinity measure
+
+Those two measures will be calculated on the more frequent items.
+
+## Dissimilarity
+
+The possibility of calculating the dissimilarity of items using the **Jaccard index** still exists and it is based on probability calcus.
+
+Checking the product dissimilarity, the most dissimilar products are `chocolate` and `green tea`, `green tea` and `milk` and `french fries` with `milk`.
+
+```{r}
+df<-data[,itemFrequency(data)>0.1]
+J_index<-dissimilarity(df, which="items") 
+round(J_index,digits=3)
+```
+
+```{r}
+plot(hclust(J_index, method = "ward.D2"), main = "Dendrogram for items")
+```
+
+## Similarity 
+
+On the contrary to Jaccard Index, let’s use **Affinity measure** in order to discover similarity of items.
+
+The **least probable itemset** contains `french fries` and `milk`.
+
+```{r}
+sim<-affinity(df)
+round(sim, digits = 4)
+```
+
+
+
+
